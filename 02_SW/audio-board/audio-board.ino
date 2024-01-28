@@ -40,7 +40,7 @@ uint8_t Power_status = 0;
 // The scale sets how much sound is needed in each frequency range to
 // show all 8 bars.  Higher numbers are more sensitive.
 //scale is different for different numbers of bands
-float offset_scale = 20.0;
+float offset_scale = 100.0;
 // An array to hold the 12 frequency bands
 float level[12];
 // This array holds the on-screen levels.  When the signal drops quickly,
@@ -81,7 +81,7 @@ void setup() {
 
   /////////////////// TIMER CONFIG ///////////////////
   //set timer when audio is not active
-  MsTimer2::set(5000, LED_flash_TIMER2); // 5_000 ms period
+  MsTimer2::set(10000, LED_flash_TIMER2); // 10_000 ms period
   delay(100);
   //as init enable power pin
   digitalWrite(PIN_POWER_SET, HIGH);
@@ -119,30 +119,31 @@ void Probe_SendToTubeBoard(uint8_t tube_board_ID, uint8_t first, uint8_t second,
   uint8_t formatted_pkt[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
   formatted_pkt[0] = '<';
-  formatted_pkt[1] = Power_status;//ID of the board based on the location of the frequency
+  formatted_pkt[1] = Power_status;
+  first = map(first, 0, 100, 0, 255);
   formatted_pkt[2] = first;
+  second = map(second, 0, 100, 0, 255);
   formatted_pkt[3] = second;
+  third = map(third, 0, 100, 0, 255);
   formatted_pkt[4] = third;
+  forth = map(forth, 0, 100, 0, 255);
   formatted_pkt[5] = forth;
-  formatted_pkt[6] = 0x0;//checksum   polynome = 0x1D,   initial value = 0x0,   xor_output = 0x70
+  formatted_pkt[6] = (first + second + third + forth)/4;
   formatted_pkt[7] = '>';
-  // Fill in the CRC
-  //crc.restart();                  // reset crc value
-  //crc.add(&formatted_pkt[1], sizeof(formatted_pkt) - 3);  // compute the crc for all 7 bytes (address, length)
-  formatted_pkt[6] = Power_status + first + second + third + forth;//crc.calc();        // fill it in where it's supposed to be
+
   switch(tube_board_ID) {
     case 0:
     {
-      Serial.print("calc crc: ");
-      Serial.print(formatted_pkt[6]);
+      //Serial.print("calc crc: ");
+      //Serial.print(formatted_pkt[6]);
       mySerial5.write(formatted_pkt, PKT_LEN);
       delay(15);
       break;
     }
     case 1:
     {
-      Serial.print("calc crc: ");
-      Serial.print(formatted_pkt[6]);
+      //Serial.print("calc crc: ");
+      //Serial.print(formatted_pkt[6]);
       mySerial2.write(formatted_pkt, PKT_LEN);
       delay(15);
       break;
@@ -190,16 +191,19 @@ void ProcessFFT()
 
       // TODO: conversion from FFT data to display bars should be
       // exponentially scaled.  But how keep it a simple example?
-      int val = level[b] * (offset_scale + tube_board_number*10);
-      if (val > 10) val = 10;
+ //     int val = level[b] * (offset_scale + tube_board_number*10);
+ //     if (val > 100) val = 100;
 
-      if (val >= shown[b]) {
-        shown[b] = val;
-      } else {
-        if (shown[b] > 0) shown[b] = shown[b] - 1;
-        val = shown[b];
-      }
+ //     if (val >= shown[b]) {
+        
+ //     } else {
+ //       if (shown[b] > 0) shown[b] = shown[b] - 1;
+ //       val = shown[b];
+ //     }
+      shown[b] = level[b] * 100;
       Serial.print(shown[b]);
+      Serial.print(" ");
+      Serial.print(level[b]);
       Serial.print(" ");
 
       if (b <= bands) {
@@ -208,7 +212,7 @@ void ProcessFFT()
       if (b == bands) {
         shown_average = shown_average/bands;
       }
-      
+
     }
     CheckAudioInput();
 
@@ -231,7 +235,7 @@ void ProcessFFT()
     //Serial.print(spdifIn.processorUsage());
 
 //////////////////////// send info to tube boards - start
-    Serial.print("  uart data: ");
+    //Serial.print("  uart data: ");
     uint8_t boards = 0;
     Probe_SendToTubeBoard(boards, shown[(4 * boards) + 0], shown[(4 * boards) + 1], shown[(4 * boards) + 2], shown[(4 * boards) + 3]);
     

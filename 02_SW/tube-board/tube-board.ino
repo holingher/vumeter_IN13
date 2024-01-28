@@ -117,21 +117,20 @@ void parseData() {      // split the data into its parts
 void processNewData(){
   boolean checkIntegrity = checkCRC();
   uint8_t Power_status = integer_array[0];
-
-  if(Power_status != 0)
+  if(checkIntegrity == true)
   {
-    if(checkIntegrity == true)
+    //enable HW circuit
+    digitalWrite(HV_SWITCH_PIN, Power_status);
+    if(Power_status != 0)
     {
       //set LED to green
       colorWipe(strip.Color(  0, 255,   0)     , 10); // Green
-      //enable HW circuit
-      digitalWrite(HV_SWITCH_PIN, HIGH);
       //treat PWM pins based on UART read
       //analogWrite values from 0 to 255
-      analogWrite(PWM1, map(integer_array[1], 0, 10, 0, 255));
-      analogWrite(PWM2, map(integer_array[2], 0, 10, 0, 255));
-      analogWrite(PWM3, map(integer_array[3], 0, 10, 0, 255));
-      analogWrite(PWM4, map(integer_array[4], 0, 10, 0, 255));
+      analogWrite(PWM1, integer_array[1]);
+      analogWrite(PWM2, integer_array[2]);
+      analogWrite(PWM3, integer_array[3]);
+      analogWrite(PWM4, integer_array[4]);
     }
     else
     {
@@ -164,12 +163,23 @@ void turnTubeBoardOFF_blue(){
 }
 
 boolean checkCRC(){
-  uint8_t calculatedCRC = 0x0;
+  uint8_t calculatedCRC = (integer_array[1] + integer_array[2] + integer_array[3] + integer_array[4])/4;
   boolean retVal = false;
-  calculatedCRC = integer_array[0] + integer_array[1] + integer_array[2] + integer_array[3] + integer_array[4];
+
   if(integer_array[PKT_LEN - 1] == calculatedCRC)
   {
+    Serial.print(calculatedCRC);
+    Serial.print("=");
+    Serial.print(integer_array[PKT_LEN - 1]);
+    Serial.println();
     retVal = true;
+  }
+  else
+  {
+    Serial.print(calculatedCRC);
+    Serial.print("=");
+    Serial.print(integer_array[PKT_LEN - 1]);
+    Serial.println('b');
   }
   return retVal;
 }
@@ -193,11 +203,11 @@ uint8_t getLowNibble(uint8_t byte)
 }
 
 void colorWipe(uint32_t color, int wait) {
-  //for(int i=0; i<strip.numPixels(); i++) { // For each pixel in strip...
-    strip.setPixelColor(1, color);         //  Set pixel's color (in RAM)
+  for(int i=0; i<strip.numPixels(); i++) { // For each pixel in strip...
+    strip.setPixelColor(i, color);         //  Set pixel's color (in RAM)
     strip.show();                          //  Update strip to match
     delay(wait);                           //  Pause for a moment
-  //}
+  }
 }
 
 void tube_swipe_startup()
