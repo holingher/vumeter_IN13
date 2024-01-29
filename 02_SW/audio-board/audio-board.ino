@@ -2,8 +2,6 @@
 
 #include <Audio.h>
 #include <MsTimer2.h>
-//#include "CRC8.h"
-//#include "CRC.h"
 #include <SoftwareSerial.h> // spelling may be wrong
 
 #define PIN_POWER_SET 6
@@ -17,8 +15,6 @@
 #define PIN_LED 13
 
 #define PKT_LEN 8
-
-//CRC8 crc(0x1d, 0, 0x70, false, false); // define the CRC parameters.
 
 bool debug_mode_enable = true;
 // GUItool: begin automatically generated code
@@ -189,22 +185,11 @@ void ProcessFFT()
       }
       //Serial.println(" ");
 
-      // TODO: conversion from FFT data to display bars should be
-      // exponentially scaled.  But how keep it a simple example?
- //     int val = level[b] * (offset_scale + tube_board_number*10);
- //     if (val > 100) val = 100;
-
- //     if (val >= shown[b]) {
-        
- //     } else {
- //       if (shown[b] > 0) shown[b] = shown[b] - 1;
- //       val = shown[b];
- //     }
       shown[b] = level[b] * 100;
       Serial.print(shown[b]);
       Serial.print(" ");
-      Serial.print(level[b]);
-      Serial.print(" ");
+      //Serial.print(level[b]);
+      //Serial.print(" ");
 
       if (b <= bands) {
         shown_average += shown[b];

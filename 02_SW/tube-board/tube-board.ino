@@ -3,6 +3,7 @@
 #ifdef __AVR__
  #include <avr/power.h> // Required for 16 MHz Adafruit Trinket
 #endif
+#include "SAMD_PWM.h"
 
 #define LED_PIN     11
 #define LED_COUNT  1
@@ -11,6 +12,14 @@
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 #define HV_SWITCH_PIN 1
+#define NUM_OF_PINS 4
+// pin 4: TCC0_CH0, Pin 5:TCC0_CH1, pin 9: TCC1_CH3, pin 10: TCC0_CH2
+uint32_t PWM_Pins[]   = { 4, 5, 9, 10 };
+//creates pwm instance
+SAMD_PWM* PWM_Instance[NUM_OF_PINS];
+float frequency[] = { 10000.0f, 10000.0f, 10000.0f, 10000.0f };
+float dutyCycle[] = { 10.0f, 10.0f, 10.0f, 10.0f };
+
 #define PWM1 3        // A3
 #define PWM2 2        // A2
 
@@ -30,12 +39,18 @@ void setup() {
   strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
   strip.show();            // Turn OFF all pixels ASAP
   strip.setBrightness(20); // Set BRIGHTNESS to about 1/5 (max = 255)
-  // initialize PWM pins
-  pinMode(PWM1, OUTPUT);
-  pinMode(PWM2, OUTPUT);
-  pinMode(PWM3, OUTPUT);
-  pinMode(PWM4, OUTPUT);
 
+  // initialize PWM pins
+  //assigns PWM frequency of 1.0 KHz and a duty cycle of 0%
+  for (uint8_t index = 0; index < NUM_OF_PINS; index++)
+  {
+    PWM_Instance[index] = new SAMD_PWM(PWM_Pins[index], frequency[index], dutyCycle[index]);
+
+    if (PWM_Instance[index])
+    {
+      PWM_Instance[index]->setPWM();
+    }
+  }
   // initialize digital pin HV_SWITCH_PIN as an output.
   pinMode(HV_SWITCH_PIN, OUTPUT);
   delay(10);
