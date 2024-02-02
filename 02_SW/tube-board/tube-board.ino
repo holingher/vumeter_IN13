@@ -3,7 +3,6 @@
 #ifdef __AVR__
  #include <avr/power.h> // Required for 16 MHz Adafruit Trinket
 #endif
-#include "SAMD_PWM.h"
 
 #define LED_PIN     11
 #define LED_COUNT  1
@@ -13,18 +12,12 @@ Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 #define HV_SWITCH_PIN 1
 #define NUM_OF_PINS 4
-// pin 4: TCC0_CH0, Pin 5:TCC0_CH1, pin 9: TCC1_CH3, pin 10: TCC0_CH2
-uint32_t PWM_Pins[]   = { 4, 5, 9, 10 };
-//creates pwm instance
-SAMD_PWM* PWM_Instance[NUM_OF_PINS];
-float frequency[] = { 10000.0f, 10000.0f, 10000.0f, 10000.0f };
-float dutyCycle[] = { 10.0f, 10.0f, 10.0f, 10.0f };
 
-#define PWM1 3        // A3
-#define PWM2 2        // A2
+#define PWM1 3        // A3  - PA05 - AIN[5] - TCC0/WO[1] 
+#define PWM2 2        // A2  - PA04 - AIN[4] - TCC0/WO[0]
 
-#define PWM3 10       // A10
-#define PWM4 9        // A9
+#define PWM3 10       // A10 - PA10 - AIN[18] - TCC1/WO[0] / TCC0/WO[2]
+#define PWM4 9        // A9  - PA09 - AIN[17] - TCC0/WO[1] / TCC1/WO[3]
 
 //UART variables
 #define PKT_LEN 6
@@ -41,16 +34,12 @@ void setup() {
   strip.setBrightness(20); // Set BRIGHTNESS to about 1/5 (max = 255)
 
   // initialize PWM pins
-  //assigns PWM frequency of 1.0 KHz and a duty cycle of 0%
-  for (uint8_t index = 0; index < NUM_OF_PINS; index++)
-  {
-    PWM_Instance[index] = new SAMD_PWM(PWM_Pins[index], frequency[index], dutyCycle[index]);
+  //I think that at lower PWM speeds and small PWM values, the IN-13 was 
+  //showing a spread of current inputs and "smearing" the bargraph output.
+  //Raising the PWM speed from the default of 976.56 Hz to the max of 62,500Hz
+  // Enable and configure generic clock generator 4
+  Setup_PWM_frequency();
 
-    if (PWM_Instance[index])
-    {
-      PWM_Instance[index]->setPWM();
-    }
-  }
   // initialize digital pin HV_SWITCH_PIN as an output.
   pinMode(HV_SWITCH_PIN, OUTPUT);
   delay(10);
@@ -249,4 +238,128 @@ void tube_swipe_startup()
     delay(30);
   }
   digitalWrite(HV_SWITCH_PIN, LOW);
+}
+
+#define TCC_CTRLA_PRESCALER_DIV768_Val 768
+//set PWM freq to 62,500Hz
+// https://www.instructables.com/IN-13-Nixie-Bargraph-Arduino-Control-Circuit/
+// https://shawnhymel.com/1710/arduino-zero-samd21-raw-pwm-using-cmsis/
+// https://blog.thea.codes/phase-shifted-pwm-on-samd/
+
+// Number to count to with PWM (TOP value). Frequency can be calculated by
+// freq = GCLK4_freq / (TCC0_prescaler * (1 + TOP_value))
+// With TOP of 47, we get a 1 MHz square wave in this example
+uint32_t period = 48 - 1;
+
+void Setup_PWM_frequency()
+{
+  // Because we are using TCC0, limit period to 24 bits
+  period = ( period < 0x00ffffff ) ? period : 0x00ffffff;
+
+  /* Enable the APB clock for TCC0 & TCC1. */
+  PM->APBCMASK.reg |= PM_APBCMASK_TCC0 | PM_APBCMASK_TCC1;
+
+  // Enable and configure generic clock generator 4
+  GCLK->GENCTRL.reg = GCLK_GENCTRL_IDC |          // Improve duty cycle (50 % / 50 %)
+                      GCLK_GENCTRL_GENEN |        // Enable generic clock gen
+                      GCLK_GENCTRL_SRC_DFLL48M |  // Select 48MHz as source
+                      GCLK_GENCTRL_ID(4);         // Select GCLK4
+  while (GCLK->STATUS.bit.SYNCBUSY);              // Wait for synchronization
+
+  // Set clock divider of 1 to generic clock generator 4
+  GCLK->GENDIV.reg = GCLK_GENDIV_DIV(4) |         // Set clock division (48/4 = 12 MHz)
+                     GCLK_GENDIV_ID(4);           // Apply to GCLK4 4
+  while (GCLK->STATUS.bit.SYNCBUSY);              // Wait for synchronization
+  
+  // Enable GCLK4 and connect it to TCC0 and TCC1
+  GCLK->CLKCTRL.reg = GCLK_CLKCTRL_CLKEN |        // Enable generic clock
+                      GCLK_CLKCTRL_GEN_GCLK4 |    // Select GCLK4
+                      GCLK_CLKCTRL_ID_TCC0_TCC1;  // Feed GCLK4 to TCC0/1
+  while (GCLK->STATUS.bit.SYNCBUSY);              // Wait for synchronization
+
+  /* Configure the clock prescaler for each TCC.
+    This lets you divide up the clocks frequency to make the TCC count slower
+    than the clock. In this case, I'm dividing the 12MHz clock by 256 making the
+    TCC operate at 46875Hz. This means each count (or "tick") is 21.3us.
+  */
+  TCC0->CTRLA.reg |= TCC_CTRLA_PRESCALER(TCC_CTRLA_PRESCALER_DIV256);
+  TCC1->CTRLA.reg |= TCC_CTRLA_PRESCALER(TCC_CTRLA_PRESCALER_DIV256);
+
+  /* Use "Normal PWM" */
+  TCC0->WAVE.reg = TCC_WAVE_WAVEGEN_NPWM;
+  /* Wait for bus synchronization */
+  while (TCC0->SYNCBUSY.bit.WAVE) {};
+
+  /* Use "Normal PWM" */
+  TCC1->WAVE.reg = TCC_WAVE_WAVEGEN_NPWM;
+  /* Wait for bus synchronization */
+  while (TCC1->SYNCBUSY.bit.WAVE) {};
+
+  /* Configure the frequency for the PWM by setting the PER register.
+   The value of the PER register determines the frequency in the following
+   way:
+
+    frequency = GCLK frequency / (TCC prescaler * (1 + PER))
+
+   So in this example frequency = 12Mhz / (256 * (1 + 512)) so the frequency
+   is 91,37Hz.
+  */
+  uint32_t period = 512;
+
+  TCC0->PER.reg = period;
+  while (TCC0->SYNCBUSY.bit.PER) {};
+  TCC1->PER.reg = period;
+  while (TCC1->SYNCBUSY.bit.PER) {};
+
+  /* n for CC[n] is determined by n = x % 4 where x is from WO[x]
+   WO[x] comes from the peripheral multiplexer - we'll get to that in a second.
+  */
+  TCC0->CC[2].reg = period / 2;
+  while (TCC0->SYNCBUSY.bit.CC2) {};
+  TCC1->CC[1].reg = period / 2;
+  while (TCC1->SYNCBUSY.bit.CC2) {};
+
+  /* Configure PA18 and PA07 to be output. */
+  PORT->Group[PORTA].DIRSET.reg = PORT_PA04;
+  PORT->Group[PORTA].OUTCLR.reg = PORT_PA04;
+
+  PORT->Group[PORTA].DIRSET.reg = PORT_PA05;
+  PORT->Group[PORTA].OUTCLR.reg = PORT_PA05;
+
+  PORT->Group[PORTA].DIRSET.reg = PORT_PA10;
+  PORT->Group[PORTA].OUTCLR.reg = PORT_PA10;
+  
+  PORT->Group[PORTA].DIRSET.reg = PORT_PA09;
+  PORT->Group[PORTA].OUTCLR.reg = PORT_PA09;
+
+  /* Enable the peripheral multiplexer for the pins. */
+  PORT->Group[PORTA].PINCFG[4].reg |= PORT_PINCFG_PMUXEN;
+  PORT->Group[PORTA].PINCFG[5].reg |= PORT_PINCFG_PMUXEN;
+  PORT->Group[PORTA].PINCFG[9].reg |= PORT_PINCFG_PMUXEN;
+  PORT->Group[PORTA].PINCFG[10].reg |= PORT_PINCFG_PMUXEN;
+
+  // Connect TCC0 timer to PA04. Function E is TCC0/WO[0] for PA04.
+  // Odd pin num (2*n + 1): use PMUXO
+  // Even pin num (2*n): use PMUXE
+  PORT->Group[PORTA].PMUX[2].reg = PORT_PMUX_PMUXE_E;
+  
+  // Connect TCC0 timer to PA05. Function E is TCC0/WO[1] for PA05.
+  // Odd pin num (2*n + 1): use PMUXO
+  // Even pin num (2*n): use PMUXE
+  PORT->Group[PORTA].PMUX[3].reg = PORT_PMUX_PMUXO_E;
+
+  // Connect TCC0 timer to PA10. Function F is TCC0/WO[2] for PA10.
+  // Odd pin num (2*n + 1): use PMUXO
+  // Even pin num (2*n): use PMUXE
+  PORT->Group[PORTA].PMUX[5].reg = PORT_PMUX_PMUXE_F;
+  
+  // Connect TCC1 timer to PA09. Function F is TCC1/WO[3] for PA09.
+  // Odd pin num (2*n + 1): use PMUXO
+  // Even pin num (2*n): use PMUXE
+  PORT->Group[PORTA].PMUX[5].reg = PORT_PMUX_PMUXO_F;
+
+  TCC0->CTRLA.reg |= (TCC_CTRLA_ENABLE);
+  while (TCC0->SYNCBUSY.bit.ENABLE) {};
+  TCC1->CTRLA.reg |= (TCC_CTRLA_ENABLE);
+  while (TCC1->SYNCBUSY.bit.ENABLE) {};
 }
