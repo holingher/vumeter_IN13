@@ -28,6 +28,11 @@ char receivedChars[numChars];
 char tempChars[numChars];        // temporary array for use when parsing
 boolean newData = false;
 
+uint32_t counter_bad_crc = 0;
+uint32_t counter_no_frame_in_time = 0;
+uint32_t counter_no_power_status = 0;
+uint32_t counter_good_frame = 0;
+
 void setup() {
   strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
   strip.show();            // Turn OFF all pixels ASAP
@@ -67,8 +72,22 @@ void loop() {
   else
   {
     //comms warning
+    counter_no_frame_in_time++;
     turnTubeBoardOFF_blue();
   }
+  Serial.print("counter_good_frame: ");
+  Serial.print(counter_good_frame);
+  Serial.print("      ");
+  Serial.print("counter_bad_crc: ");
+  Serial.print(counter_bad_crc);
+  Serial.print("      ");
+  Serial.print("counter_no_frame_in_time: ");
+  Serial.print(counter_no_frame_in_time);
+  Serial.print("      ");
+  Serial.print("counter_no_power_status: ");
+  Serial.print(counter_no_power_status);
+  Serial.print("      ");
+  Serial.println();
 }
 
 void recvWithStartEndMarkers() {
@@ -135,14 +154,17 @@ void processNewData(){
       analogWrite(PWM2, integer_array[2]);
       analogWrite(PWM3, integer_array[3]);
       analogWrite(PWM4, integer_array[4]);
+      counter_good_frame++;
     }
     else
     {
+      counter_no_power_status++;
       turnTubeBoardOFF_red();
     }
   }
   else
   {
+    counter_bad_crc++;
     turnTubeBoardOFF_red();
   }
 }
@@ -172,18 +194,18 @@ boolean checkCRC(){
 
   if(integer_array[PKT_LEN - 1] == calculatedCRC)
   {
-    Serial.print(calculatedCRC);
-    Serial.print("=");
-    Serial.print(integer_array[PKT_LEN - 1]);
-    Serial.println();
+   // Serial.print(calculatedCRC);
+   // Serial.print("=");
+   // Serial.print(integer_array[PKT_LEN - 1]);
+   // Serial.println();
     retVal = true;
   }
   else
   {
-    Serial.print(calculatedCRC);
-    Serial.print("=");
-    Serial.print(integer_array[PKT_LEN - 1]);
-    Serial.println('b');
+    //Serial.print(calculatedCRC);
+   // Serial.print("=");
+   // Serial.print(integer_array[PKT_LEN - 1]);
+   // Serial.println('b');
   }
   return retVal;
 }
@@ -224,7 +246,7 @@ void tube_swipe_startup()
     analogWrite(PWM3, fadeValue);
     analogWrite(PWM4, fadeValue);
     // wait for 30 milliseconds to see the dimming effect
-    delay(30);
+    delay(20);
   }
 
   // fade out from max to min in increments of 5 points:
@@ -235,7 +257,7 @@ void tube_swipe_startup()
     analogWrite(PWM3, fadeValue);
     analogWrite(PWM4, fadeValue);
     // wait for 30 milliseconds to see the dimming effect
-    delay(30);
+    delay(20);
   }
   digitalWrite(HV_SWITCH_PIN, LOW);
 }

@@ -31,22 +31,26 @@ SoftwareSerial mySerial5(21, 20);//serial5 - first tube_board - pin close to 12V
 SoftwareSerial mySerial2(7, 8);//3rd pin from 12V line
 SoftwareSerial mySerial4(16, 17);//pin close to GND
 
-
 uint8_t Power_status = 0;
 // The scale sets how much sound is needed in each frequency range to
-// show all 8 bars.  Higher numbers are more sensitive.
-//scale is different for different numbers of bands
+// show all bars.  Higher numbers are more sensitive.
+// scale is different for different numbers of bands
 float offset_scale = 100.0;
+
 // An array to hold the 12 frequency bands
 float level[12];
+
 // This array holds the on-screen levels.  When the signal drops quickly,
 // these are used to lower the on-screen level 1 bar per update, which
 // looks more pleasing to corresponds to human sound perception.
 int shown[12];
+
 //determine an average to know when audio is not inputed
 int shown_average = 0;
+
 //number of connected tube boards. Default is 0
-int tube_board_number = 0;
+int tube_board_number = 2;
+
 const int bins = 512;
 int bands = 0;
 
@@ -77,7 +81,7 @@ void setup() {
 
   /////////////////// TIMER CONFIG ///////////////////
   //set timer when audio is not active
-  MsTimer2::set(10000, LED_flash_TIMER2); // 10_000 ms period
+  MsTimer2::set(20000, LED_flash_TIMER2); // 20_000 ms period
   delay(100);
   //as init enable power pin
   digitalWrite(PIN_POWER_SET, HIGH);
@@ -85,12 +89,13 @@ void setup() {
 
   delay(1000);
   /////////////////// UART INIT ///////////////////
-  //LPUART3 with pins: RX:21 and TX:20     
-  mySerial5.begin(460800);  
-  //LPUART3 with pins: RX:7 and TX:8     
+  //LPUART8 or arduino "serial5" with pins: RX:21 and TX:20     
+  mySerial5.begin(460800);
+  //LPUART4 or arduino "serial2" with pins: RX:7 and TX:8     
   mySerial2.begin(460800);
-
-////////////////////////////////////////////  
+  //LPUART3 or arduino "serial4" with pins: RX:16 and TX:18
+  mySerial4.begin(460800);
+  ////////////////////////////////////////////
 }
 
 // Constexpr construction
@@ -111,54 +116,57 @@ uint8_t getLowNibble(uint8_t byte)
     return ((byte >> 0) & 0xF);
 }
 
-void Probe_SendToTubeBoard(uint8_t tube_board_ID, uint8_t first, uint8_t second, uint8_t third, uint8_t forth){
-  uint8_t formatted_pkt[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+void Probe_SendToTubeBoard(/*uint8_t tube_board_ID, uint8_t first, uint8_t second, uint8_t third, uint8_t forth*/){
+  uint8_t formatted_pkt[32] = {0x00};
+  const float n = 0.7;
+  const uint8_t max_value = 255;
 
   formatted_pkt[0] = '<';
   formatted_pkt[1] = Power_status;
-  first = map(first, 0, 100, 0, 255);
-  formatted_pkt[2] = first;
-  second = map(second, 0, 100, 0, 255);
-  formatted_pkt[3] = second;
-  third = map(third, 0, 100, 0, 255);
-  formatted_pkt[4] = third;
-  forth = map(forth, 0, 100, 0, 255);
-  formatted_pkt[5] = forth;
-  formatted_pkt[6] = (first + second + third + forth)/4;
+  formatted_pkt[2] = (uint8_t)constrain(pow(map(shown[0], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+  formatted_pkt[3] = (uint8_t)constrain(pow(map(shown[1], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+  formatted_pkt[4] = (uint8_t)constrain(pow(map(shown[2], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+  formatted_pkt[5] = (uint8_t)constrain(pow(map(shown[3], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+  formatted_pkt[6] = (formatted_pkt[2] + formatted_pkt[3] + formatted_pkt[4] + formatted_pkt[5])/4;
   formatted_pkt[7] = '>';
 
-  switch(tube_board_ID) {
-    case 0:
-    {
-      //Serial.print("calc crc: ");
-      //Serial.print(formatted_pkt[6]);
-      mySerial5.write(formatted_pkt, PKT_LEN);
-      delay(15);
-      break;
-    }
-    case 1:
-    {
-      //Serial.print("calc crc: ");
-      //Serial.print(formatted_pkt[6]);
-      mySerial2.write(formatted_pkt, PKT_LEN);
-      delay(15);
-      break;
-    }
-    default:
-      break;
-  }
+  formatted_pkt[8] = '<';
+  formatted_pkt[9] = Power_status;
+  formatted_pkt[10] = (uint8_t)constrain(pow(map(shown[4], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+  formatted_pkt[11] = (uint8_t)constrain(pow(map(shown[5], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+  formatted_pkt[12] = (uint8_t)constrain(pow(map(shown[6], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+  formatted_pkt[13] = (uint8_t)constrain(pow(map(shown[7], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+  formatted_pkt[14] = (formatted_pkt[10] + formatted_pkt[11] + formatted_pkt[12] + formatted_pkt[13])/4;
+  formatted_pkt[15] = '>';
 
+  formatted_pkt[16] = '<';
+  formatted_pkt[17] = Power_status;
+  shown[8] = map(shown[8], 0, 100, 0, 255);
+  formatted_pkt[18] = shown[8];
+  shown[9] = map(shown[9], 0, 100, 0, 255);
+  formatted_pkt[19] = shown[9];
+  shown[10] = map(shown[10], 0, 100, 0, 255);
+  formatted_pkt[20] = shown[10];
+  shown[11] = map(shown[11], 0, 100, 0, 255);
+  formatted_pkt[21] = shown[11];
+  formatted_pkt[22] = (shown[8] + shown[9] + shown[10] + shown[11])/4;
+  formatted_pkt[23] = '>';
+
+  mySerial5.write(&formatted_pkt[0], PKT_LEN);
+  delay(8);
+  mySerial2.write(&formatted_pkt[8], PKT_LEN);
+  delay(8);
+  mySerial4.write(&formatted_pkt[16], PKT_LEN);
 }
 
 void loop() {
-  if(debug_mode_enable){
-    tube_board_number = 2;
-  }
-
-  if(tube_board_number != 0) {
+  if(tube_board_number != 0) 
+  {
     ProcessFFT();
+    Probe_SendToTubeBoard();
   }
-  else {
+  else 
+  {
     Serial.println("tube board not sending back the number of bands");
   }
 }
@@ -167,7 +175,7 @@ void loop() {
 void ProcessFFT()
 {
   if (fft1024.available()) {
-    //we have one board with 4 tubes
+    //we have one board with 4 tubes and we can attach tube_board_number
     bands = tube_board_number * 4;
     for (int b = 0 ; b < bands ; b++)
     {
@@ -185,7 +193,8 @@ void ProcessFFT()
       }
       //Serial.println(" ");
 
-      shown[b] = level[b] * 100;
+      shown[b] = level[b] * offset_scale;
+      if(shown[b] >= 100) shown[b] = 100;
       Serial.print(shown[b]);
       Serial.print(" ");
       //Serial.print(level[b]);
@@ -221,14 +230,14 @@ void ProcessFFT()
 
 //////////////////////// send info to tube boards - start
     //Serial.print("  uart data: ");
-    uint8_t boards = 0;
-    Probe_SendToTubeBoard(boards, shown[(4 * boards) + 0], shown[(4 * boards) + 1], shown[(4 * boards) + 2], shown[(4 * boards) + 3]);
+  //  uint8_t boards = 0;
+ //   Probe_SendToTubeBoard(/*boards, shown[(4 * boards) + 0], shown[(4 * boards) + 1], shown[(4 * boards) + 2], shown[(4 * boards) + 3]*/);
     
-    boards = 1;
-    Probe_SendToTubeBoard(boards, shown[(4 * boards) + 0], shown[(4 * boards) + 1], shown[(4 * boards) + 2], shown[(4 * boards) + 3]);
+ //   boards = 1;
+  //  Probe_SendToTubeBoard(boards, shown[(4 * boards) + 0], shown[(4 * boards) + 1], shown[(4 * boards) + 2], shown[(4 * boards) + 3]);
     
-    boards = 2;
-    Probe_SendToTubeBoard(boards, shown[(4 * boards) + 0], shown[(4 * boards) + 1], shown[(4 * boards) + 2], shown[(4 * boards) + 3]);
+   // boards = 2;
+ //   Probe_SendToTubeBoard(boards, shown[(4 * boards) + 0], shown[(4 * boards) + 1], shown[(4 * boards) + 2], shown[(4 * boards) + 3]);
     
     //boards = 3;
     //Probe_SendToTubeBoard(boards, shown[(4 * boards) + 0], shown[(4 * boards) + 1], shown[(4 * boards) + 2], shown[(4 * boards) + 3]);
