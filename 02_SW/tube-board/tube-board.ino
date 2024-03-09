@@ -172,15 +172,6 @@ void processNewData(){
 void turnTubeBoardOFF_red(){
   //set LED to red
   colorWipe(strip.Color(255,   0,   0)     , 10); // Red 
-  //set PWM pins to 0
-  analogWrite(PWM1, 0);
-  analogWrite(PWM2, 0);
-  analogWrite(PWM3, 0);
-  analogWrite(PWM4, 0);
-  //wait before closing
-  delay(10);
-  //disable HW circuit
-  digitalWrite(HV_SWITCH_PIN, LOW);
 }
 
 void turnTubeBoardOFF_blue(){

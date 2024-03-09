@@ -3,6 +3,9 @@
 #include <Audio.h>
 #include <MsTimer2.h>
 #include <SoftwareSerial.h> // spelling may be wrong
+#ifdef SNOOZE_T40
+#include <Snooze.h>
+#endif
 
 #define PIN_POWER_SET 6
 #define PIN_SLEEP_SET 7
@@ -15,6 +18,17 @@
 #define PIN_LED 13
 
 #define PKT_LEN 8
+
+#ifdef SNOOZE_T40
+// Load drivers
+SnoozeDigital digital;
+SnoozeCompare compare;
+SnoozeTimer timer;
+SnoozeUSBSerial usb;
+SnoozeAlarm  alarm;
+
+SnoozeBlock config_teensy40(usb, digital, compare, alarm);
+#endif
 
 bool debug_mode_enable = true;
 // GUItool: begin automatically generated code
@@ -38,12 +52,12 @@ uint8_t Power_status = 0;
 float offset_scale = 100.0;
 
 // An array to hold the 12 frequency bands
-float level[12];
+float level[16];
 
 // This array holds the on-screen levels.  When the signal drops quickly,
 // these are used to lower the on-screen level 1 bar per update, which
 // looks more pleasing to corresponds to human sound perception.
-int shown[12];
+int shown[16];
 
 //determine an average to know when audio is not inputed
 int shown_average = 0;
@@ -60,7 +74,7 @@ extern float tempmonGetTemp(void);
 void setup() {
   /////////////////// AUDIO ///////////////////
   // Audio requires memory to work.
-  AudioMemory(12);
+  AudioMemory(16);
   // configure the mixer to equally add left & right
   mixer1.gain(0, 0.5);
   mixer1.gain(1, 0.5);
@@ -79,6 +93,46 @@ void setup() {
 
   pinMode(PIN_LED, OUTPUT);
 
+#ifdef SNOOZE_T40
+  /////////////////// SNOOZE CONFIG ///////////////////
+  /********************************************************
+    Define digital pins for waking the teensy up. This
+    combines pinMode and attachInterrupt in one function.
+
+    Teensy 4.0
+    Digtal pins: all pins
+  ********************************************************/
+  digital.pinMode(15, INPUT_PULLUP, FALLING);//pin, mode, type
+
+  /********************************************************
+    Teensy 4.0 Set Low Power Timer wake up in Seconds.
+    MAX: 131071s
+  ********************************************************/
+  timer.setTimer(5);// seconds
+
+  /********************************************************
+    In sleep the Compare module works by setting the
+    internal 6 bit DAC to a volatge threshold for voltage
+    crossing measurements. The internal DAC uses a 64 tap
+    resistor ladder network supplied by VOUT33 at 0.0515625v
+    per tap (VOUT33/64). Thus the possible threshold voltages
+    are 0.0515625*(0-64). Only one compare pin can be used at
+    a time.
+
+    parameter "type": LOW & FALLING are the same and have no effect.
+    parameter "type": HIGH & RISING are the same and have no effect.
+
+    Teensy 4.0
+    Compare pins: 0, 1, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23
+  ********************************************************/
+  // trigger at threshold values greater than 1.65v
+  //(pin, type, threshold(v))
+  //compare.pinMode(11, HIGH, 1.65);
+
+  // trigger at threshold values less than 1.65v
+  //(pin, type, threshold(v))
+  compare.pinMode(15, LOW, 1.65);
+#endif
   /////////////////// TIMER CONFIG ///////////////////
   //set timer when audio is not active
   MsTimer2::set(20000, LED_flash_TIMER2); // 20_000 ms period
@@ -141,15 +195,11 @@ void Probe_SendToTubeBoard(/*uint8_t tube_board_ID, uint8_t first, uint8_t secon
 
   formatted_pkt[16] = '<';
   formatted_pkt[17] = Power_status;
-  shown[8] = map(shown[8], 0, 100, 0, 255);
-  formatted_pkt[18] = shown[8];
-  shown[9] = map(shown[9], 0, 100, 0, 255);
-  formatted_pkt[19] = shown[9];
-  shown[10] = map(shown[10], 0, 100, 0, 255);
-  formatted_pkt[20] = shown[10];
-  shown[11] = map(shown[11], 0, 100, 0, 255);
-  formatted_pkt[21] = shown[11];
-  formatted_pkt[22] = (shown[8] + shown[9] + shown[10] + shown[11])/4;
+  formatted_pkt[18] = (uint8_t)constrain(pow(map(shown[8], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+  formatted_pkt[19] = (uint8_t)constrain(pow(map(shown[9], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+  formatted_pkt[20] = (uint8_t)constrain(pow(map(shown[10], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+  formatted_pkt[21] = (uint8_t)constrain(pow(map(shown[11], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+  formatted_pkt[22] = (formatted_pkt[18] + formatted_pkt[19] + formatted_pkt[20] + formatted_pkt[21])/4;
   formatted_pkt[23] = '>';
 
   mySerial5.write(&formatted_pkt[0], PKT_LEN);
@@ -160,15 +210,27 @@ void Probe_SendToTubeBoard(/*uint8_t tube_board_ID, uint8_t first, uint8_t secon
 }
 
 void loop() {
-  if(tube_board_number != 0) 
-  {
-    ProcessFFT();
-    Probe_SendToTubeBoard();
+#ifdef SNOOZE_T40
+  int who;
+  /********************************************************
+    feed the sleep function its wakeup parameters. Then go
+    to sleep.
+  ********************************************************/
+  who = Snooze.sleep( config_teensy40 );// return module that woke processor
+  if (who == 15) { // pin wakeup source is its pin value
+#endif
+    if(tube_board_number != 0) 
+    {
+      ProcessFFT();
+      Probe_SendToTubeBoard();
+    }
+    else 
+    {
+      Serial.println("tube board not sending back the number of bands");
+    }
+#ifdef SNOOZE_T40
   }
-  else 
-  {
-    Serial.println("tube board not sending back the number of bands");
-  }
+#endif
 }
 
 
@@ -181,16 +243,16 @@ void ProcessFFT()
     {
       int from = int (exp (log (bins) * b / bands)) ;
       int to   = int (exp (log (bins) * (b+1) / bands)) ;
-      if (to > from)
+      if (to >= from)
       {
         level[b] = fft1024.read (from, to);
-
-        //Serial.print(from);
-        //Serial.print(" to ");
-        //Serial.print(to);
-        //Serial.print(" ");
-        //Serial.print(level[b]);
       }
+      
+      //Serial.print(from);
+      //Serial.print(" to ");
+      //Serial.print(to);
+      //Serial.print(" ");
+      //Serial.print(level[b]);
       //Serial.println(" ");
 
       shown[b] = level[b] * offset_scale;
@@ -208,7 +270,9 @@ void ProcessFFT()
       }
 
     }
+#ifndef SNOOZE_T40
     CheckAudioInput();
+#endif
 
     //Serial.print("  average freq: ");
     //Serial.print(shown_average);
@@ -216,8 +280,8 @@ void ProcessFFT()
     Serial.print("  timer: ");
     Serial.print(MsTimer2::count);
 
-    //Serial.print("  input freq: ");
-    //Serial.print(spdifIn.getInputFrequency());
+    Serial.print("  input freq: ");
+    Serial.print(spdifIn.getInputFrequency());
 
     //Serial.print("  switchVal: ");
     //Serial.print(Switch_readState());
@@ -225,25 +289,8 @@ void ProcessFFT()
     //Serial.print("  temp: ");
     //Serial.print(tempmonGetTemp());
 
-    //Serial.print("  cpu: ");
-    //Serial.print(spdifIn.processorUsage());
-
-//////////////////////// send info to tube boards - start
-    //Serial.print("  uart data: ");
-  //  uint8_t boards = 0;
- //   Probe_SendToTubeBoard(/*boards, shown[(4 * boards) + 0], shown[(4 * boards) + 1], shown[(4 * boards) + 2], shown[(4 * boards) + 3]*/);
-    
- //   boards = 1;
-  //  Probe_SendToTubeBoard(boards, shown[(4 * boards) + 0], shown[(4 * boards) + 1], shown[(4 * boards) + 2], shown[(4 * boards) + 3]);
-    
-   // boards = 2;
- //   Probe_SendToTubeBoard(boards, shown[(4 * boards) + 0], shown[(4 * boards) + 1], shown[(4 * boards) + 2], shown[(4 * boards) + 3]);
-    
-    //boards = 3;
-    //Probe_SendToTubeBoard(boards, shown[(4 * boards) + 0], shown[(4 * boards) + 1], shown[(4 * boards) + 2], shown[(4 * boards) + 3]);
-//i    0            1            2
-//j    0 1 2 3      4 5 6 7      8 9 10 11
-//////////////////////// send info to tube boards - stop
+    Serial.print("  cpu: ");
+    Serial.print(spdifIn.processorUsage());
 
     Serial.println("");
     shown_average = 0;
