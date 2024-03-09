@@ -1,9 +1,9 @@
 # SpectrumAnalyzer_SPDIF_IN_Nixie_IN-13
-Project started from and inspired from https://github.com/wyager/vumeter which uses Rust language. My goal was to re-implement in Arduino with all hardware changes that were necessary. 
-Nixie IN-13: 110 $ on ebay (cost might vary but I bought 10 pieces)
-Teensy40: 50 $/pcs
-QT PY: 5 $/pcs (found a local knock off)
-ORJ-8: 5 $/3 pcs (couldn't find a reliable source so I bought these on aliexpress)
+Project started from and inspired from https://github.com/wyager/vumeter which uses Rust language. My goal was to re-implement in Arduino with all hardware changes that were necessary.
+- Nixie IN-13: 110 $ on ebay (cost might vary but I bought 10 pieces)
+- Teensy40: 50 $/pcs
+- QT PY: 5 $/pcs (found a local knock off)
+- ORJ-8: 5 $/3 pcs (couldn't find a reliable source so I bought these on aliexpress)
 
 Hardware (most of the components were ordered from https://www.farnell.com/):
 - 1x Teensy40: since a exmaple was already in place, I choose to stick with Teensy40. This dev board is used in a lot of audio projects. More information can be found here: https://www.pjrc.com/store/teensy40.html
@@ -20,12 +20,16 @@ Hardware (most of the components were ordered from https://www.farnell.com/):
 - 16x Potentiometers: 3266X-1-500 (or 50k replacement) -> used to calibrate the tubes
 - Capacitors (size: 3216): 10 uF (you need to buy them in bulk so I don't put here a number)
 
+Total cost for the project would be around 400 $ if you are willing to put some effort and gather materials and build it yourself.
+
 PCB's were inspired from the Will's project and I tried to reproduce them as close as possible. I changed some sizes to fit the QT PY and also on audio board to be easily accesible. The boards were ordered from https://jlcpcb.com/
 
 Software(Arduino based code):
 1) Teensy40:
    The goal was to take an audio signal, in this case digital (optical), and process it to control the tubes. I will split this in functionalities:
    a) Audio processing
+     The Audio library is used in many projects and is proven in use. There is a dedicated forum for this:
+     https://forum.pjrc.com/index.php?forums/audio-projects.8/
      Input is an ORJ-8 connector (SPDIF) which has 3 pins: 3v3, GND and OUT. OUT is connected to Pin 15 at Teensy40 according to the specification from https://www.pjrc.com/store/teensy40.html
      Pin 15 is dedicated for SPDIF input. This input is then used by Audio library (https://www.pjrc.com/teensy/td_libs_Audio.html) and configured using the dedicated tool specified here:     
      https://www.pjrc.com/teensy/gui/index.html?info=AudioInputAnalogStereo.
