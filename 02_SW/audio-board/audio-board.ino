@@ -1,4 +1,5 @@
 #undef ARDUINO_TEENSY_MICROMOD
+//#define SNOOZE_T40
 
 #include <Audio.h>
 #include <MsTimer2.h>
@@ -44,6 +45,7 @@ AudioConnection          patchCord5(mixer1, fft1024);
 SoftwareSerial mySerial5(21, 20);//serial5 - first tube_board - pin close to 12V line
 SoftwareSerial mySerial2(7, 8);//3rd pin from 12V line
 SoftwareSerial mySerial4(16, 17);//pin close to GND
+SoftwareSerial mySerial1(0, 1);//
 
 uint8_t Power_status = 0;
 // The scale sets how much sound is needed in each frequency range to
@@ -131,7 +133,7 @@ void setup() {
 
   // trigger at threshold values less than 1.65v
   //(pin, type, threshold(v))
-  compare.pinMode(15, LOW, 1.65);
+  compare.pinMode(0, HIGH, 1.65);
 #endif
   /////////////////// TIMER CONFIG ///////////////////
   //set timer when audio is not active
@@ -147,8 +149,10 @@ void setup() {
   mySerial5.begin(460800);
   //LPUART4 or arduino "serial2" with pins: RX:7 and TX:8     
   mySerial2.begin(460800);
-  //LPUART3 or arduino "serial4" with pins: RX:16 and TX:18
+  //LPUART3 or arduino "serial4" with pins: RX:16 and TX:17
   mySerial4.begin(460800);
+  //LPUART or arduino "serial1" with pins: RX:0 and TX:1
+  mySerial1.begin(460800);
   ////////////////////////////////////////////
 }
 
@@ -174,39 +178,77 @@ void Probe_SendToTubeBoard(/*uint8_t tube_board_ID, uint8_t first, uint8_t secon
   uint8_t formatted_pkt[32] = {0x00};
   const float n = 0.7;
   const uint8_t max_value = 255;
+  
+  if(tube_board_number != 0)
+  {
+    formatted_pkt[0] = '<';
+    formatted_pkt[1] = Power_status;
+    formatted_pkt[2] = (uint8_t)constrain(pow(map(shown[0], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[3] = (uint8_t)constrain(pow(map(shown[1], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[4] = (uint8_t)constrain(pow(map(shown[2], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[5] = (uint8_t)constrain(pow(map(shown[3], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[6] = (formatted_pkt[2] + formatted_pkt[3] + formatted_pkt[4] + formatted_pkt[5])/4;
+    formatted_pkt[7] = '>';
+  }
+  
+  if((tube_board_number == 2) || (tube_board_number == 3) || (tube_board_number == 4))
+  {
+    formatted_pkt[8] = '<';
+    formatted_pkt[9] = Power_status;
+    formatted_pkt[10] = (uint8_t)constrain(pow(map(shown[4], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[11] = (uint8_t)constrain(pow(map(shown[5], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[12] = (uint8_t)constrain(pow(map(shown[6], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[13] = (uint8_t)constrain(pow(map(shown[7], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[14] = (formatted_pkt[10] + formatted_pkt[11] + formatted_pkt[12] + formatted_pkt[13])/4;
+    formatted_pkt[15] = '>';
+  }
 
-  formatted_pkt[0] = '<';
-  formatted_pkt[1] = Power_status;
-  formatted_pkt[2] = (uint8_t)constrain(pow(map(shown[0], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-  formatted_pkt[3] = (uint8_t)constrain(pow(map(shown[1], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-  formatted_pkt[4] = (uint8_t)constrain(pow(map(shown[2], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-  formatted_pkt[5] = (uint8_t)constrain(pow(map(shown[3], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-  formatted_pkt[6] = (formatted_pkt[2] + formatted_pkt[3] + formatted_pkt[4] + formatted_pkt[5])/4;
-  formatted_pkt[7] = '>';
+  if((tube_board_number == 3) || (tube_board_number == 4))
+  {
+    formatted_pkt[16] = '<';
+    formatted_pkt[17] = Power_status;
+    formatted_pkt[18] = (uint8_t)constrain(pow(map(shown[8], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[19] = (uint8_t)constrain(pow(map(shown[9], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[20] = (uint8_t)constrain(pow(map(shown[10], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[21] = (uint8_t)constrain(pow(map(shown[11], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[22] = (formatted_pkt[18] + formatted_pkt[19] + formatted_pkt[20] + formatted_pkt[21])/4;
+    formatted_pkt[23] = '>';
+  }
+  
+  if(tube_board_number == 4)
+  {
+    formatted_pkt[24] = '<';
+    formatted_pkt[25] = Power_status;
+    formatted_pkt[26] = (uint8_t)constrain(pow(map(shown[12], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[27] = (uint8_t)constrain(pow(map(shown[13], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[28] = (uint8_t)constrain(pow(map(shown[14], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[29] = (uint8_t)constrain(pow(map(shown[15], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
+    formatted_pkt[30] = (formatted_pkt[26] + formatted_pkt[27] + formatted_pkt[28] + formatted_pkt[29])/4;
+    formatted_pkt[31] = '>';
+  }
+  
+  if((tube_board_number != 0) && (tube_board_number <= 4))
+  {
+    mySerial5.write(&formatted_pkt[0], PKT_LEN);
+    delay(8);
+  }
+  
+  if((tube_board_number == 2) || (tube_board_number == 3) || (tube_board_number == 4))
+  {
+    mySerial2.write(&formatted_pkt[8], PKT_LEN);
+    delay(8);
+  }
 
-  formatted_pkt[8] = '<';
-  formatted_pkt[9] = Power_status;
-  formatted_pkt[10] = (uint8_t)constrain(pow(map(shown[4], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-  formatted_pkt[11] = (uint8_t)constrain(pow(map(shown[5], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-  formatted_pkt[12] = (uint8_t)constrain(pow(map(shown[6], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-  formatted_pkt[13] = (uint8_t)constrain(pow(map(shown[7], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-  formatted_pkt[14] = (formatted_pkt[10] + formatted_pkt[11] + formatted_pkt[12] + formatted_pkt[13])/4;
-  formatted_pkt[15] = '>';
-
-  formatted_pkt[16] = '<';
-  formatted_pkt[17] = Power_status;
-  formatted_pkt[18] = (uint8_t)constrain(pow(map(shown[8], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-  formatted_pkt[19] = (uint8_t)constrain(pow(map(shown[9], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-  formatted_pkt[20] = (uint8_t)constrain(pow(map(shown[10], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-  formatted_pkt[21] = (uint8_t)constrain(pow(map(shown[11], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-  formatted_pkt[22] = (formatted_pkt[18] + formatted_pkt[19] + formatted_pkt[20] + formatted_pkt[21])/4;
-  formatted_pkt[23] = '>';
-
-  mySerial5.write(&formatted_pkt[0], PKT_LEN);
-  delay(8);
-  mySerial2.write(&formatted_pkt[8], PKT_LEN);
-  delay(8);
-  mySerial4.write(&formatted_pkt[16], PKT_LEN);
+  if((tube_board_number == 3) || (tube_board_number == 4))
+  {
+    mySerial4.write(&formatted_pkt[16], PKT_LEN);
+    delay(8);
+  }
+  
+  if(tube_board_number == 4)
+  {
+    mySerial1.write(&formatted_pkt[24], PKT_LEN);
+  }
 }
 
 void loop() {
