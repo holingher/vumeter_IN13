@@ -44,7 +44,7 @@ AudioConnection          patchCord5(mixer1, fft1024);
 
 SoftwareSerial mySerial5(21, 20);//serial5 - first tube_board - pin close to 12V line
 SoftwareSerial mySerial2(7, 8);//3rd pin from 12V line
-SoftwareSerial mySerial4(16, 17);//pin close to GND
+SoftwareSerial mySerial6(25, 24);//pin close to GND
 SoftwareSerial mySerial1(0, 1);//
 
 uint8_t Power_status = 0;
@@ -54,18 +54,18 @@ uint8_t Power_status = 0;
 float offset_scale = 100.0;
 
 // An array to hold the 12 frequency bands
-float level[16];
+float level[20];
 
 // This array holds the on-screen levels.  When the signal drops quickly,
 // these are used to lower the on-screen level 1 bar per update, which
 // looks more pleasing to corresponds to human sound perception.
-int shown[16];
+int shown[20];
 
 //determine an average to know when audio is not inputed
 int shown_average = 0;
 
 //number of connected tube boards. Default is 0
-int tube_board_number = 2;
+uint8_t tube_board_number = 4;
 
 const int bins = 512;
 int bands = 0;
@@ -76,10 +76,10 @@ extern float tempmonGetTemp(void);
 void setup() {
   /////////////////// AUDIO ///////////////////
   // Audio requires memory to work.
-  AudioMemory(16);
+  AudioMemory(20);
   // configure the mixer to equally add left & right
-  mixer1.gain(0, 0.5);
-  mixer1.gain(1, 0.5);
+  mixer1.gain(0, 1);
+  mixer1.gain(1, 1);
 
   /////////////////// TEMP MON ///////////////////
   tempmon_init();
@@ -149,10 +149,10 @@ void setup() {
   mySerial5.begin(460800);
   //LPUART4 or arduino "serial2" with pins: RX:7 and TX:8     
   mySerial2.begin(460800);
-  //LPUART3 or arduino "serial4" with pins: RX:16 and TX:17
-  mySerial4.begin(460800);
   //LPUART or arduino "serial1" with pins: RX:0 and TX:1
   mySerial1.begin(460800);
+  //LPUART3 or arduino "serial6" with pins: RX:25 and TX:24
+  mySerial6.begin(460800);
   ////////////////////////////////////////////
 }
 
@@ -178,6 +178,7 @@ void Probe_SendToTubeBoard(/*uint8_t tube_board_ID, uint8_t first, uint8_t secon
   uint8_t formatted_pkt[32] = {0x00};
   const float n = 0.7;
   const uint8_t max_value = 255;
+  int delay_serial = 5;
   
   if(tube_board_number != 0)
   {
@@ -230,24 +231,25 @@ void Probe_SendToTubeBoard(/*uint8_t tube_board_ID, uint8_t first, uint8_t secon
   if((tube_board_number != 0) && (tube_board_number <= 4))
   {
     mySerial5.write(&formatted_pkt[0], PKT_LEN);
-    delay(8);
+    delay(7);
   }
   
   if((tube_board_number == 2) || (tube_board_number == 3) || (tube_board_number == 4))
   {
     mySerial2.write(&formatted_pkt[8], PKT_LEN);
-    delay(8);
+    delay(7);
   }
 
   if((tube_board_number == 3) || (tube_board_number == 4))
   {
-    mySerial4.write(&formatted_pkt[16], PKT_LEN);
-    delay(8);
+    mySerial1.write(&formatted_pkt[16], PKT_LEN);
+    delay(7);
   }
   
   if(tube_board_number == 4)
   {
-    mySerial1.write(&formatted_pkt[24], PKT_LEN);
+    mySerial6.write(&formatted_pkt[24], PKT_LEN);
+    delay(7);
   }
 }
 
