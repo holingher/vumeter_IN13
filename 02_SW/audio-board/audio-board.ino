@@ -48,6 +48,9 @@ SoftwareSerial mySerial6(25, 24);//pin close to GND
 SoftwareSerial mySerial1(0, 1);//
 
 uint8_t Power_status = 0;
+uint8_t Serial_Delay_ms = 1;
+uint8_t Debug_LED_brightness = 5;
+
 // The scale sets how much sound is needed in each frequency range to
 // show all bars.  Higher numbers are more sensitive.
 // scale is different for different numbers of bands
@@ -141,7 +144,8 @@ void setup() {
   delay(100);
   //as init enable power pin
   digitalWrite(PIN_POWER_SET, HIGH);
-  digitalWrite(PIN_LED, HIGH);
+  // set the brightness of the debug LED
+  analogWrite(PIN_LED, Debug_LED_brightness);
 
   delay(1000);
   /////////////////// UART INIT ///////////////////
@@ -231,25 +235,25 @@ void Probe_SendToTubeBoard(/*uint8_t tube_board_ID, uint8_t first, uint8_t secon
   if((tube_board_number != 0) && (tube_board_number <= 4))
   {
     mySerial5.write(&formatted_pkt[0], PKT_LEN);
-    delay(7);
+    delay(Serial_Delay_ms);
   }
   
   if((tube_board_number == 2) || (tube_board_number == 3) || (tube_board_number == 4))
   {
     mySerial2.write(&formatted_pkt[8], PKT_LEN);
-    delay(7);
+    delay(Serial_Delay_ms);
   }
 
   if((tube_board_number == 3) || (tube_board_number == 4))
   {
     mySerial1.write(&formatted_pkt[16], PKT_LEN);
-    delay(7);
+    delay(Serial_Delay_ms);
   }
   
   if(tube_board_number == 4)
   {
     mySerial6.write(&formatted_pkt[24], PKT_LEN);
-    delay(7);
+    delay(Serial_Delay_ms);
   }
 }
 

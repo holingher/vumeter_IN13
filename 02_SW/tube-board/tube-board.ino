@@ -4,6 +4,9 @@
  #include <avr/power.h> // Required for 16 MHz Adafruit Trinket
 #endif
 
+//#define DEBUG_LED_ENABLED
+#define DEBUG_SERIAL_ENABLED
+
 #define LED_PIN     11
 #define LED_COUNT  1
 #define BRIGHTNESS 50
@@ -36,7 +39,7 @@ uint32_t counter_good_frame = 0;
 void setup() {
   strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
   strip.show();            // Turn OFF all pixels ASAP
-  strip.setBrightness(20); // Set BRIGHTNESS to about 1/5 (max = 255)
+  strip.setBrightness(1); // Set BRIGHTNESS to about very low (max = 255)
 
   // initialize PWM pins
   //I think that at lower PWM speeds and small PWM values, the IN-13 was 
@@ -75,6 +78,8 @@ void loop() {
     counter_no_frame_in_time++;
     turnTubeBoardOFF_blue();
   }
+//for debug
+#ifdef DEBUG_SERIAL_ENABLED
   Serial.print("counter_good_frame: ");
   Serial.print(counter_good_frame);
   Serial.print("      ");
@@ -88,6 +93,7 @@ void loop() {
   Serial.print(counter_no_power_status);
   Serial.print("      ");
   Serial.println();
+#endif
 }
 
 void recvWithStartEndMarkers() {
@@ -185,18 +191,24 @@ boolean checkCRC(){
 
   if(integer_array[PKT_LEN - 1] == calculatedCRC)
   {
-   // Serial.print(calculatedCRC);
-   // Serial.print("=");
-   // Serial.print(integer_array[PKT_LEN - 1]);
-   // Serial.println();
+//for debug
+#ifdef DEBUG_SERIAL_ENABLED
+    Serial.print(calculatedCRC);
+    Serial.print("=");
+    Serial.print(integer_array[PKT_LEN - 1]);
+    Serial.println();
+#endif
     retVal = true;
   }
   else
   {
-    //Serial.print(calculatedCRC);
-   // Serial.print("=");
-   // Serial.print(integer_array[PKT_LEN - 1]);
-   // Serial.println('b');
+//for debug
+#ifdef DEBUG_SERIAL_ENABLED
+    Serial.print(calculatedCRC);
+    Serial.print("=");
+    Serial.print(integer_array[PKT_LEN - 1]);
+    Serial.println('b');
+#endif
   }
   return retVal;
 }
@@ -219,6 +231,9 @@ uint8_t getLowNibble(uint8_t byte)
     return ((byte >> 0) & 0xF);
 }
 
+
+//for debug
+#ifdef DEBUG_LED_ENABLED
 void colorWipe(uint32_t color, int wait) {
   for(int i=0; i<strip.numPixels(); i++) { // For each pixel in strip...
     strip.setPixelColor(i, color);         //  Set pixel's color (in RAM)
@@ -226,6 +241,12 @@ void colorWipe(uint32_t color, int wait) {
     delay(wait);                           //  Pause for a moment
   }
 }
+#else
+void colorWipe(uint32_t color, int wait) {
+  //this needs to be in sync with teensy serial delay. Currently working good with 1 ms on teensy side
+  delay(3);
+}
+#endif
 
 void tube_swipe_startup()
 {
@@ -250,7 +271,6 @@ void tube_swipe_startup()
     // wait for 30 milliseconds to see the dimming effect
     delay(20);
   }
-  digitalWrite(HV_SWITCH_PIN, LOW);
 }
 
 #define TCC_CTRLA_PRESCALER_DIV768_Val 768
