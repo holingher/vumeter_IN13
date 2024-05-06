@@ -29,7 +29,9 @@ PCB's were inspired from the Will's project and I tried to reproduce them as clo
 
 Software(Arduino based code):
 1) Teensy40:
+   
    The goal was to take an audio signal, in this case digital (optical), and process it to control the tubes. I will split this in functionalities:
+   
    a) Audio processing
      The Audio library is used in many projects and is proven in use. There is a dedicated forum for this:
      https://forum.pjrc.com/index.php?forums/audio-projects.8/
@@ -64,16 +66,20 @@ Software(Arduino based code):
 
    d) debug analysis
      There is some implementation which can be activated or is already activated which outputs information over the Teensy40 USB interface (using serial monitor)
-3) QT PY
+3) QT PY:
+   
    a) Data reception from audio board
       Each tube board is seen as slave and it can only receive data. The reception is done using the protocol described above. The received data is then passed trough some checks like CRC check or powerStatus check.
+   
    b) tube control
       The value calculated by audio board is directly fed into analogWrite since the processing is already done.
+   
    c) power control
       The first byte from the payload is controlling the power status.
+   
    d) debug analysis
       QT PY is mainly used for RGB projects so it has an RGB LED pre-attached. With this software implementation:
-       Green: data received and processed,
+       Green: data received and processed
        Blue: data is not recieved
        Red: Data is not reliable - CRC failed
      There is some implementation which can be activated or is already activated which outputs information over the QT PY USB interface (using serial monitor)
