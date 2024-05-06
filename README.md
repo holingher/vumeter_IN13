@@ -1,4 +1,5 @@
 https://youtu.be/c3Gf_IgAxl0
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/c3Gf_IgAxl0/0.jpg)](https://www.youtube.com/watch?v=c3Gf_IgAxl0)
 
 # SpectrumAnalyzer_SPDIF_IN_Nixie_IN-13
 Project started from and inspired from https://github.com/wyager/vumeter which uses Rust language. My goal was to re-implement in Arduino with all hardware changes that were necessary.
