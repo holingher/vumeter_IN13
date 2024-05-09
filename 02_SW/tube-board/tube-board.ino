@@ -5,6 +5,7 @@
 #endif
 
 //#define DEBUG_LED_ENABLED
+//#define DEBUG_SERIAL_CMP_ENABLED
 #define DEBUG_SERIAL_ENABLED
 
 #define LED_PIN     11
@@ -61,6 +62,24 @@ void setup() {
 
   //start cooms
   Serial1.begin(460800);
+}
+
+// Constexpr construction
+uint8_t makeByte(uint8_t highNibble, uint8_t lowNibble)
+{
+    return (((highNibble & 0xF) << 4) | ((lowNibble & 0xF) << 0));
+}
+
+// Constexpr high nibble extraction
+uint8_t getHighNibble(uint8_t byte)
+{
+    return ((byte >> 4) & 0xF);
+}
+
+// Constexpr low nibble extraction
+uint8_t getLowNibble(uint8_t byte)
+{
+    return ((byte >> 0) & 0xF);
 }
 
 void loop() {
@@ -145,12 +164,13 @@ void parseData() {      // split the data into its parts
 
 void processNewData(){
   boolean checkIntegrity = checkCRC();
-  uint8_t Power_status = integer_array[0];
+  uint8_t Power_status = getHighNibble(integer_array[0]);
+  uint8_t brightness_level = getLowNibble(integer_array[0]);
   if(checkIntegrity == true)
   {
     //enable HW circuit
     digitalWrite(HV_SWITCH_PIN, Power_status);
-    if(Power_status != 0)
+    if(Power_status == 1)
     {
       //set LED to green
       colorWipe(strip.Color(  0, 255,   0)     , 10); // Green
@@ -186,13 +206,13 @@ void turnTubeBoardOFF_blue(){
 }
 
 boolean checkCRC(){
-  uint8_t calculatedCRC = (integer_array[1] + integer_array[2] + integer_array[3] + integer_array[4])/4;
+  uint8_t calculatedCRC = (uint8_t)((integer_array[1] + integer_array[2] + integer_array[3] + integer_array[4])/4);
   boolean retVal = false;
 
   if(integer_array[PKT_LEN - 1] == calculatedCRC)
   {
 //for debug
-#ifdef DEBUG_SERIAL_ENABLED
+#ifdef DEBUG_SERIAL_CMP_ENABLED
     Serial.print(calculatedCRC);
     Serial.print("=");
     Serial.print(integer_array[PKT_LEN - 1]);
@@ -203,7 +223,7 @@ boolean checkCRC(){
   else
   {
 //for debug
-#ifdef DEBUG_SERIAL_ENABLED
+#ifdef DEBUG_SERIAL_CMP_ENABLED
     Serial.print(calculatedCRC);
     Serial.print("=");
     Serial.print(integer_array[PKT_LEN - 1]);
@@ -212,25 +232,6 @@ boolean checkCRC(){
   }
   return retVal;
 }
-
-// Constexpr construction
-uint8_t makeByte(uint8_t highNibble, uint8_t lowNibble)
-{
-    return (((highNibble & 0xF) << 4) | ((lowNibble & 0xF) << 0));
-}
-
-// Constexpr high nibble extraction
-uint8_t getHighNibble(uint8_t byte)
-{
-    return ((byte >> 4) & 0xF);
-}
-
-// Constexpr low nibble extraction
-uint8_t getLowNibble(uint8_t byte)
-{
-    return ((byte >> 0) & 0xF);
-}
-
 
 //for debug
 #ifdef DEBUG_LED_ENABLED
@@ -271,6 +272,8 @@ void tube_swipe_startup()
     // wait for 30 milliseconds to see the dimming effect
     delay(20);
   }
+  //enable HW circuit
+  digitalWrite(HV_SWITCH_PIN, HIGH);
 }
 
 #define TCC_CTRLA_PRESCALER_DIV768_Val 768

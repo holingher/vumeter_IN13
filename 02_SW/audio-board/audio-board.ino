@@ -16,6 +16,11 @@
 #define PIN_SWITCH_C 11
 #define PIN_SWITCH_D 12
 
+#define LEVEL_0 0
+#define LEVEL_1 1
+#define LEVEL_2 2
+#define LEVEL_3 3
+
 #define PIN_LED 13
 
 #define PKT_LEN 8
@@ -178,57 +183,59 @@ uint8_t getLowNibble(uint8_t byte)
     return ((byte >> 0) & 0xF);
 }
 
-void Probe_SendToTubeBoard(/*uint8_t tube_board_ID, uint8_t first, uint8_t second, uint8_t third, uint8_t forth*/){
+void Probe_SendToTubeBoard()
+{
   uint8_t formatted_pkt[32] = {0x00};
   const float n = 0.7;
   const uint8_t max_value = 255;
-  int delay_serial = 5;
+  uint8_t delay_serial = 5;
+  uint8_t brightness_level = ReadSwitchState();
   
   if(tube_board_number != 0)
   {
     formatted_pkt[0] = '<';
-    formatted_pkt[1] = Power_status;
+    formatted_pkt[1] = makeByte(Power_status, brightness_level);
     formatted_pkt[2] = (uint8_t)constrain(pow(map(shown[0], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
     formatted_pkt[3] = (uint8_t)constrain(pow(map(shown[1], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
     formatted_pkt[4] = (uint8_t)constrain(pow(map(shown[2], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
     formatted_pkt[5] = (uint8_t)constrain(pow(map(shown[3], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-    formatted_pkt[6] = (formatted_pkt[2] + formatted_pkt[3] + formatted_pkt[4] + formatted_pkt[5])/4;
+    formatted_pkt[6] = (uint8_t)((formatted_pkt[2] + formatted_pkt[3] + formatted_pkt[4] + formatted_pkt[5])/4);
     formatted_pkt[7] = '>';
   }
   
   if((tube_board_number == 2) || (tube_board_number == 3) || (tube_board_number == 4))
   {
     formatted_pkt[8] = '<';
-    formatted_pkt[9] = Power_status;
+    formatted_pkt[9] = makeByte(Power_status, brightness_level);
     formatted_pkt[10] = (uint8_t)constrain(pow(map(shown[4], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
     formatted_pkt[11] = (uint8_t)constrain(pow(map(shown[5], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
     formatted_pkt[12] = (uint8_t)constrain(pow(map(shown[6], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
     formatted_pkt[13] = (uint8_t)constrain(pow(map(shown[7], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-    formatted_pkt[14] = (formatted_pkt[10] + formatted_pkt[11] + formatted_pkt[12] + formatted_pkt[13])/4;
+    formatted_pkt[14] = (uint8_t)((formatted_pkt[10] + formatted_pkt[11] + formatted_pkt[12] + formatted_pkt[13])/4);
     formatted_pkt[15] = '>';
   }
 
   if((tube_board_number == 3) || (tube_board_number == 4))
   {
     formatted_pkt[16] = '<';
-    formatted_pkt[17] = Power_status;
+    formatted_pkt[17] = makeByte(Power_status, brightness_level);
     formatted_pkt[18] = (uint8_t)constrain(pow(map(shown[8], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
     formatted_pkt[19] = (uint8_t)constrain(pow(map(shown[9], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
     formatted_pkt[20] = (uint8_t)constrain(pow(map(shown[10], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
     formatted_pkt[21] = (uint8_t)constrain(pow(map(shown[11], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-    formatted_pkt[22] = (formatted_pkt[18] + formatted_pkt[19] + formatted_pkt[20] + formatted_pkt[21])/4;
+    formatted_pkt[22] = (uint8_t)((formatted_pkt[18] + formatted_pkt[19] + formatted_pkt[20] + formatted_pkt[21])/4);
     formatted_pkt[23] = '>';
   }
   
   if(tube_board_number == 4)
   {
     formatted_pkt[24] = '<';
-    formatted_pkt[25] = Power_status;
+    formatted_pkt[25] = makeByte(Power_status, brightness_level);
     formatted_pkt[26] = (uint8_t)constrain(pow(map(shown[12], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
     formatted_pkt[27] = (uint8_t)constrain(pow(map(shown[13], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
     formatted_pkt[28] = (uint8_t)constrain(pow(map(shown[14], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
     formatted_pkt[29] = (uint8_t)constrain(pow(map(shown[15], 0, 100, 0, max_value), n)/(pow(max_value, n - 1)), 0, max_value);
-    formatted_pkt[30] = (formatted_pkt[26] + formatted_pkt[27] + formatted_pkt[28] + formatted_pkt[29])/4;
+    formatted_pkt[30] = (uint8_t)((formatted_pkt[26] + formatted_pkt[27] + formatted_pkt[28] + formatted_pkt[29])/4);
     formatted_pkt[31] = '>';
   }
   
@@ -255,6 +262,25 @@ void Probe_SendToTubeBoard(/*uint8_t tube_board_ID, uint8_t first, uint8_t secon
     mySerial6.write(&formatted_pkt[24], PKT_LEN);
     delay(Serial_Delay_ms);
   }
+}
+
+uint8_t ReadSwitchState()
+{
+  if ((digitalRead(PIN_SWITCH_A) == LOW) && (digitalRead(PIN_SWITCH_B) == HIGH) && (digitalRead(PIN_SWITCH_C) == LOW) && (digitalRead(PIN_SWITCH_D) == LOW))
+  {
+    return LEVEL_1;
+  }
+  if ((digitalRead(PIN_SWITCH_A) == LOW) && (digitalRead(PIN_SWITCH_B) == LOW) && (digitalRead(PIN_SWITCH_C) == HIGH) && (digitalRead(PIN_SWITCH_D) == LOW)) 
+  {
+    return LEVEL_2;
+  }
+  if ((digitalRead(PIN_SWITCH_A) == LOW) && (digitalRead(PIN_SWITCH_B) == LOW) && (digitalRead(PIN_SWITCH_C) == LOW) && (digitalRead(PIN_SWITCH_D) == HIGH))
+  {
+    return LEVEL_3;
+  }
+
+  //default: if ((digitalRead(PIN_SWITCH_A) == HIGH) && (digitalRead(PIN_SWITCH_B) == LOW) && (digitalRead(PIN_SWITCH_C) == LOW) && (digitalRead(PIN_SWITCH_D) == LOW)) 
+  return LEVEL_0;
 }
 
 void loop() {
