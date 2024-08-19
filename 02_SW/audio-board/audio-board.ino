@@ -4,9 +4,7 @@
 #include <Audio.h>
 #include <MsTimer2.h>
 #include <SoftwareSerial.h> // spelling may be wrong
-#ifdef SNOOZE_T40
-#include <Snooze.h>
-#endif
+#include "Hysteresis.h"
 
 #define PIN_POWER_SET 6
 #define PIN_SLEEP_SET 7
@@ -22,26 +20,16 @@
 #define LEVEL_3 3
 
 #define PIN_LED 13
+#define FAN_PIN 23
 
 #define PKT_LEN 8
 
-#ifdef SNOOZE_T40
-// Load drivers
-SnoozeDigital digital;
-SnoozeCompare compare;
-SnoozeTimer timer;
-SnoozeUSBSerial usb;
-SnoozeAlarm  alarm;
-
-SnoozeBlock config_teensy40(usb, digital, compare, alarm);
-#endif
-
 bool debug_mode_enable = true;
 // GUItool: begin automatically generated code
-AudioMixer4              mixer1;         //xy=312,134
-AudioAnalyzeFFT1024      fft1024;        //xy=467,147
+AudioMixer4              mixer1;
+AudioAnalyzeFFT1024      fft1024;
 // GUItool: end automatically generated code
-AsyncAudioInputSPDIF3     spdifIn(false, false, 100, 20, 80);	//dither = false, noiseshaping = false, anti-aliasing attenuation=100dB, minimum half resampling filter length=20, maximum half resampling filter length=80
+AsyncAudioInputSPDIF3     spdifIn(true, true, 100, 20, 80);	//dither = false, noiseshaping = false, anti-aliasing attenuation=100dB, minimum half resampling filter length=20, maximum half resampling filter length=80
 
 AudioConnection          patchCord1(spdifIn, 0, mixer1, 0);
 AudioConnection          patchCord2(spdifIn, 1, mixer1, 1);
@@ -55,6 +43,9 @@ SoftwareSerial mySerial1(0, 1);//
 uint8_t Power_status = 0;
 uint8_t Serial_Delay_ms = 1;
 uint8_t Debug_LED_brightness = 5;
+
+// Added samples (and result) will be initialised as uint8_t, hysteresis step 5
+Hysteresis <uint8_t> hysteresis(5);
 
 // The scale sets how much sound is needed in each frequency range to
 // show all bars.  Higher numbers are more sensitive.
@@ -80,11 +71,20 @@ int bands = 0;
 
 extern float tempmonGetTemp(void);
 ////////////////////////////////
+#if defined(__IMXRT1062__)
+extern "C" uint32_t set_arm_clock(uint32_t frequency);
+#endif
 
 void setup() {
+  // underclock Teensy to save a bit of power and cool it down
+  // the frames loss will increase on serial
+  //Other option is to put a radiator and/or a mini fan
+  set_arm_clock(600000000); //temp will reach 80 degree Celsius
+  //set_arm_clock(320000000); //temp will reach 67 degree Celsius
+  //set_arm_clock(240000000); //temp will reach 64 degree Celsius
   /////////////////// AUDIO ///////////////////
   // Audio requires memory to work.
-  AudioMemory(20);
+  AudioMemory(16);
   // configure the mixer to equally add left & right
   mixer1.gain(0, 1);
   mixer1.gain(1, 1);
@@ -102,47 +102,8 @@ void setup() {
   pinMode(PIN_SWITCH_D, INPUT_PULLUP);
 
   pinMode(PIN_LED, OUTPUT);
+  pinMode(FAN_PIN, OUTPUT);
 
-#ifdef SNOOZE_T40
-  /////////////////// SNOOZE CONFIG ///////////////////
-  /********************************************************
-    Define digital pins for waking the teensy up. This
-    combines pinMode and attachInterrupt in one function.
-
-    Teensy 4.0
-    Digtal pins: all pins
-  ********************************************************/
-  digital.pinMode(15, INPUT_PULLUP, FALLING);//pin, mode, type
-
-  /********************************************************
-    Teensy 4.0 Set Low Power Timer wake up in Seconds.
-    MAX: 131071s
-  ********************************************************/
-  timer.setTimer(5);// seconds
-
-  /********************************************************
-    In sleep the Compare module works by setting the
-    internal 6 bit DAC to a volatge threshold for voltage
-    crossing measurements. The internal DAC uses a 64 tap
-    resistor ladder network supplied by VOUT33 at 0.0515625v
-    per tap (VOUT33/64). Thus the possible threshold voltages
-    are 0.0515625*(0-64). Only one compare pin can be used at
-    a time.
-
-    parameter "type": LOW & FALLING are the same and have no effect.
-    parameter "type": HIGH & RISING are the same and have no effect.
-
-    Teensy 4.0
-    Compare pins: 0, 1, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23
-  ********************************************************/
-  // trigger at threshold values greater than 1.65v
-  //(pin, type, threshold(v))
-  //compare.pinMode(11, HIGH, 1.65);
-
-  // trigger at threshold values less than 1.65v
-  //(pin, type, threshold(v))
-  compare.pinMode(0, HIGH, 1.65);
-#endif
   /////////////////// TIMER CONFIG ///////////////////
   //set timer when audio is not active
   MsTimer2::set(20000, LED_flash_TIMER2); // 20_000 ms period
@@ -162,25 +123,25 @@ void setup() {
   mySerial1.begin(460800);
   //LPUART3 or arduino "serial6" with pins: RX:25 and TX:24
   mySerial6.begin(460800);
-  ////////////////////////////////////////////
+  ///////////////////////////////////////////
 }
 
 // Constexpr construction
 uint8_t makeByte(uint8_t highNibble, uint8_t lowNibble)
 {
-    return (((highNibble & 0xF) << 4) | ((lowNibble & 0xF) << 0));
+  return (((highNibble & 0xF) << 4) | ((lowNibble & 0xF) << 0));
 }
 
 // Constexpr high nibble extraction
 uint8_t getHighNibble(uint8_t byte)
 {
-    return ((byte >> 4) & 0xF);
+  return ((byte >> 4) & 0xF);
 }
 
 // Constexpr low nibble extraction
 uint8_t getLowNibble(uint8_t byte)
 {
-    return ((byte >> 0) & 0xF);
+  return ((byte >> 0) & 0xF);
 }
 
 void Probe_SendToTubeBoard()
@@ -266,53 +227,47 @@ void Probe_SendToTubeBoard()
 
 uint8_t ReadSwitchState()
 {
-  if ((digitalRead(PIN_SWITCH_A) == LOW) && (digitalRead(PIN_SWITCH_B) == HIGH) && (digitalRead(PIN_SWITCH_C) == LOW) && (digitalRead(PIN_SWITCH_D) == LOW))
-  {
-    return LEVEL_1;
+  uint8_t result = 0;
+  for(int i = 0; i < 4; i++) {
+      result |= !digitalRead(9+i) << i;
   }
-  if ((digitalRead(PIN_SWITCH_A) == LOW) && (digitalRead(PIN_SWITCH_B) == LOW) && (digitalRead(PIN_SWITCH_C) == HIGH) && (digitalRead(PIN_SWITCH_D) == LOW)) 
-  {
-    return LEVEL_2;
-  }
-  if ((digitalRead(PIN_SWITCH_A) == LOW) && (digitalRead(PIN_SWITCH_B) == LOW) && (digitalRead(PIN_SWITCH_C) == LOW) && (digitalRead(PIN_SWITCH_D) == HIGH))
-  {
-    return LEVEL_3;
-  }
-
-  //default: if ((digitalRead(PIN_SWITCH_A) == HIGH) && (digitalRead(PIN_SWITCH_B) == LOW) && (digitalRead(PIN_SWITCH_C) == LOW) && (digitalRead(PIN_SWITCH_D) == LOW)) 
-  return LEVEL_0;
+  return result;
 }
 
 void loop() {
-#ifdef SNOOZE_T40
-  int who;
-  /********************************************************
-    feed the sleep function its wakeup parameters. Then go
-    to sleep.
-  ********************************************************/
-  who = Snooze.sleep( config_teensy40 );// return module that woke processor
-  if (who == 15) { // pin wakeup source is its pin value
-#endif
-    if(tube_board_number != 0) 
-    {
-      ProcessFFT();
-      Probe_SendToTubeBoard();
-    }
-    else 
-    {
-      Serial.println("tube board not sending back the number of bands");
-    }
-#ifdef SNOOZE_T40
+  if(tube_board_number != 0) 
+  {
+    ProcessFFT();
+    Probe_SendToTubeBoard();
   }
-#endif
+  else 
+  {
+    Serial.println("tube board not sending back the number of bands");
+  }
 }
-
 
 void ProcessFFT()
 {
   if (fft1024.available()) {
     //we have one board with 4 tubes and we can attach tube_board_number
     bands = tube_board_number * 4;
+    Serial.print("   1  ");
+    Serial.print("   2  ");
+    Serial.print("   3  ");
+    Serial.print("   4  ");
+    Serial.print("   5  ");
+    Serial.print("   6  ");
+    Serial.print("   7  ");
+    Serial.print("   8  ");
+    Serial.print("   9  ");
+    Serial.print("  10  ");
+    Serial.print("  11  ");
+    Serial.print("  12  ");
+    Serial.print("  13  ");
+    Serial.print("  14  ");
+    Serial.print("  15  ");
+    Serial.print("  16  ");
+    Serial.println("");
     for (int b = 0 ; b < bands ; b++)
     {
       int from = int (exp (log (bins) * b / bands)) ;
@@ -331,8 +286,18 @@ void ProcessFFT()
 
       shown[b] = level[b] * offset_scale;
       if(shown[b] >= 100) shown[b] = 100;
-      Serial.print(shown[b]);
-      Serial.print(" ");
+      if(shown[b] < 10)
+      {
+        Serial.print("   ");
+        Serial.print(shown[b]);
+        Serial.print("  ");
+      }
+      else
+      {
+        Serial.print("  ");
+        Serial.print(shown[b]);
+        Serial.print("  ");
+      }
       //Serial.print(level[b]);
       //Serial.print(" ");
 
@@ -344,9 +309,16 @@ void ProcessFFT()
       }
 
     }
-#ifndef SNOOZE_T40
     CheckAudioInput();
-#endif
+
+    Serial.println("");
+
+    Serial.print("F_CPU_ACTUAL=");
+    Serial.print(F_CPU_ACTUAL);
+    
+    double bufferedTime=spdifIn.getBufferedTime();
+    Serial.print("  buffered time [micro seconds]: ");
+    Serial.print(bufferedTime*1e6,2);
 
     //Serial.print("  average freq: ");
     //Serial.print(shown_average);
@@ -357,34 +329,71 @@ void ProcessFFT()
     Serial.print("  input freq: ");
     Serial.print(spdifIn.getInputFrequency());
 
-    //Serial.print("  switchVal: ");
-    //Serial.print(Switch_readState());
+    Serial.print("  switchVal: ");
+    Serial.print(ReadSwitchState());
 
-    //Serial.print("  temp: ");
-    //Serial.print(tempmonGetTemp());
+    float internal_temp = tempmonGetTemp();
+    Serial.print("  temp: ");
+    Serial.print(internal_temp);
+    internal_temp = hysteresis.add(internal_temp);
+    FanControl(internal_temp);
+    Serial.print("  temp_h: ");
+    Serial.print(internal_temp);
 
-    Serial.print("  cpu: ");
-    Serial.print(spdifIn.processorUsage());
+    //Serial.print("  cpu: ");
+    //Serial.print(spdifIn.processorUsage());
+
+	  //Serial.print("  Memory usage: ");
+    //Serial.print(AudioMemoryUsage());
+
+    //Serial.print("  max number of used blocks: ");
+    //Serial.println(AudioMemoryUsageMax()); 
 
     Serial.println("");
     shown_average = 0;
   }
 }
 
-void LED_flash_TIMER2()
+void FanControl(float input_temp)
 {
-  //disable power pin
-  digitalWrite(PIN_POWER_SET, LOW);
-  digitalWrite(PIN_LED, LOW);
-  Power_status = 0;
+  if(input_temp < 60)
+  {
+    analogWrite(FAN_PIN, 0);
+  }
+  else if((input_temp > 60) && (input_temp < 70))
+  {
+    analogWrite(FAN_PIN, 150);
+  }
+  else if((input_temp > 70) && (input_temp < 80))
+  {
+    analogWrite(FAN_PIN, 200);
+  }
+  else if(input_temp > 80)
+  {
+    analogWrite(FAN_PIN, 250);
+  }
+  else
+  {
+    analogWrite(FAN_PIN, 0);
+  }
 }
 
-uint8_t Switch_readState() {
-    uint8_t result = 0;
-    for(int i = 0; i < 4; i++) {
-        result |= !digitalRead(9+i) << i;
-    }
-    return result;
+uint8_t counter_general_power = 0;
+void LED_flash_TIMER2()
+{
+  if(counter_general_power == 0)
+  {
+    //tell slaves to turn off
+    Power_status = 0;
+    counter_general_power = 1;
+  }
+  if(counter_general_power == 1)
+  {
+    //disable overall power
+    digitalWrite(PIN_POWER_SET, LOW);
+    digitalWrite(PIN_LED, LOW);
+    counter_general_power = 0;
+  }
 }
 
 void CheckAudioInput()
@@ -417,5 +426,6 @@ void CheckAudioInput()
     digitalWrite(PIN_POWER_SET, HIGH);
     digitalWrite(PIN_LED, HIGH);
     Power_status = 1;
+    counter_general_power = 0;
   }
 }
